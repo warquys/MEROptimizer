@@ -1,23 +1,19 @@
-using AdminToys;
-using Logger = LabApi.Features.Console.Logger;
-using PrimitiveObjectToy = AdminToys.PrimitiveObjectToy;
-using LabApi.Events.Arguments.PlayerEvents;
-using MEC;
-using MEROptimizer.Application.Components;
-using Mirror;
-using PlayerRoles;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Linq;
-using UnityEngine;
-using UnityEngine.Assertions.Must;
+using AdminToys;
+using LabApi.Events.Arguments.PlayerEvents;
 using LabApi.Features.Wrappers;
+using MEC;
+using MEROptimizer.Application.Components;
+using MEROptimizer.MEROptimizer.Application.Components;
+using Mirror;
+using PlayerRoles;
 using ProjectMER.Events.Arguments;
-using ProjectMER.Features.Objects;
-using ProjectMER.Events.Handlers;
+using UnityEngine;
+using LightSourceToy = AdminToys.LightSourceToy;
+using Logger = LabApi.Features.Console.Logger;
+using PrimitiveObjectToy = AdminToys.PrimitiveObjectToy;
 #if EXILED
 using Exiled.Events.EventArgs.Player;
 #endif
@@ -26,6 +22,8 @@ namespace MEROptimizer.Application
   public class MEROptimizer
   {
     public static uint PrimitiveAssetId;
+    
+    public static uint LightAssetId;
 
     private bool excludeCollidables;
 
@@ -49,7 +47,7 @@ namespace MEROptimizer.Application
 
     public static float numberOfPrimitivePerSpawn;
 
-    public static float MinimumSizeBeforeBeingBigPrimitive;
+    public static float MinimumSizeBeforeBeingBigElement;
 
     public static bool isDynamiclyDisabled = false;
 
@@ -75,7 +73,7 @@ namespace MEROptimizer.Application
       maxPrimitivesPerCluster = config.MaxPrimitivesPerCluster;
       shouldSpectatorsBeAffectedByPDS = config.ShouldSpectatorBeAffectedByDistanceSpawning;
       numberOfPrimitivePerSpawn = config.numberOfPrimitivePerSpawn;
-      MinimumSizeBeforeBeingBigPrimitive = config.MinimumSizeBeforeBeingBigPrimitive;
+      MinimumSizeBeforeBeingBigElement = config.MinimumSizeBeforeBeingBigPrimitive;
       ShouldTutorialsBeAffectedByDistanceSpawning = config.ShouldTutorialsBeAffectedByDistanceSpawning;
       CustomSchematicSpawnDistance = config.CustomSchematicSpawnDistance;
 
@@ -144,7 +142,7 @@ namespace MEROptimizer.Application
     Dictionary<PrimitiveObjectToy, bool> GetPrimitivesToOptimize(Transform parent, List<Transform> parentToExclude,
       Dictionary<PrimitiveObjectToy, bool> primitives = null, bool clusterChilds = true)
     {
-
+      
       if (primitives == null) primitives = new Dictionary<PrimitiveObjectToy, bool>();
 
       for (int i = 0; i < parent.childCount; i++)
@@ -164,14 +162,13 @@ namespace MEROptimizer.Application
           }
         }
 
+        if (excludedNames.Any(n => child.name.ToLower().Contains(n.ToLower())))
+        {
+          continue;
+        }
+
         if (child.TryGetComponent(out PrimitiveObjectToy primitive))
         {
-
-          if (excludedNames.Any(n => primitive.name.ToLower().Contains(n.ToLower())))
-          {
-            continue;
-          }
-
           if (this.excludeCollidables && primitive.PrimitiveFlags.HasFlag(PrimitiveFlags.Collidable))
           {
             continue;
@@ -181,21 +178,51 @@ namespace MEROptimizer.Application
           {
             primitives.Add(primitive, clusterChilds);
           }
-
-          //continue;
         }
 
-        if (!parentToExclude.Contains(child))
-        {
-          if (!excludedNames.Any(n => child.name.ToLower().Contains(n.ToLower())))
-          {
-            GetPrimitivesToOptimize(child, parentToExclude, primitives, clusterChilds: clusterChilds);
-          }
-        }
+        GetPrimitivesToOptimize(child, parentToExclude, primitives, clusterChilds: clusterChilds);
       }
 
-      //return GetPrimitivesToOptimize(null, parentToExclude, primitives);
       return primitives;
+    }
+
+    Dictionary<LightSourceToy, bool> GetLightsToOptimize(Transform parent, List<Transform> parentToExclude,
+      Dictionary<LightSourceToy, bool> lights = null, bool clusterChilds = true)
+    {
+
+      if (lights == null) lights = new Dictionary<LightSourceToy, bool>();
+
+      for (int i = 0; i < parent.childCount; i++)
+      {
+        Transform child = parent.GetChild(i);
+        if (child == null || parentToExclude.Contains(child)) continue;
+
+        if (clusterChilds)
+        {
+          foreach (string name in excludedNamesForUnspawningDistantObjects)
+          {
+            if (child.name.Contains(name))
+            {
+              clusterChilds = false;
+              //break;
+            }
+          }
+        }
+
+        if (excludedNames.Any(n => child.name.ToLower().Contains(n.ToLower())))
+        {
+          continue;
+        }
+
+        if (child.TryGetComponent(out LightSourceToy light))
+        {
+          lights.Add(light, clusterChilds);
+        }
+
+        GetLightsToOptimize(child, parentToExclude, lights, clusterChilds: clusterChilds);
+      }
+
+      return lights;
     }
 
     // --------------- EXILED/LabAPI Events
@@ -240,21 +267,36 @@ namespace MEROptimizer.Application
     {
       Clear();
 
-      if (PrimitiveAssetId != 0) return;
+      if (PrimitiveAssetId != 0 && LightAssetId != 0) return;
 
       foreach (GameObject prefab in NetworkClient.prefabs.Values)
       {
-          if (prefab.TryGetComponent<PrimitiveObjectToy>(out _))
-          {
-              PrimitiveAssetId = prefab.GetComponent<NetworkIdentity>().assetId;
-              Logger.Debug("PrimitiveObjectToy AssetId successfully found.");
-              break;
-          }
+        if (PrimitiveAssetId == 0 && prefab.TryGetComponent<PrimitiveObjectToy>(out _))
+        {
+          PrimitiveAssetId = prefab.GetComponent<NetworkIdentity>().assetId;
+          Logger.Debug("PrimitiveObjectToy AssetId successfully found.");
+        }
+
+        if (LightAssetId == 0 && prefab.TryGetComponent<LightSourceToy>(out _))
+        {
+          LightAssetId = prefab.GetComponent<NetworkIdentity>().assetId;
+          Logger.Debug("LightSourceToy AssetId successfully found.");
+        }
+
+        if (PrimitiveAssetId != 0 && LightAssetId != 0)
+        {
+          break;
+        }
       }
 
       if (PrimitiveAssetId == 0)
       {
-          Logger.Error("Could not find the PrimitiveObjectToy prefab! Client-side primitives will fail to spawn.");
+        Logger.Error("Could not find the PrimitiveObjectToy prefab! Client-side primitives will fail to spawn.");
+      }
+
+      if (LightAssetId == 0)
+      {
+        Logger.Error("Could not find the LightSourceToy prefab! Client-side lights will fail to spawn.");
       }
     }
 
@@ -282,7 +324,7 @@ namespace MEROptimizer.Application
       foreach (OptimizedSchematic schematic in optimizedSchematics.Where(s => s != null && s.schematic != null))
       {
         MEROptimizer.Debug($"Displaying static client sided primitives of {schematic.schematic.Name} to {player.DisplayName} because he just connected !");
-        schematic.SpawnClientPrimitives(player);
+        schematic.SpawnClientElements(player);
       }
     }
 
@@ -325,7 +367,7 @@ namespace MEROptimizer.Application
               {
                 MEROptimizer.Debug($"Spawning all clusters (as a fade spawn) of {schematic.schematic.Name} to {player.DisplayName} because he spawned as a spectator (ssbadbs : {shouldSpectatorsBeAffectedByPDS})");
 
-                foreach (PrimitiveCluster cluster in schematic.primitiveClusters)
+                foreach (ElementCluster cluster in schematic.elementClusters)
                 {
                   if (cluster.instantSpawn)
                   {
@@ -334,7 +376,7 @@ namespace MEROptimizer.Application
                   else
                   {
                     cluster.awaitingSpawn.Remove(player);
-                    cluster.awaitingSpawn.Add(player, cluster.primitives.ToList());
+                    cluster.awaitingSpawn.Add(player, cluster.elements.ToList());
                     cluster.spawning = true;
                   }
                 }
@@ -354,7 +396,7 @@ namespace MEROptimizer.Application
               {
                 MEROptimizer.Debug($"Spawning all clusters (as a fade spawn) of {schematic.schematic.Name} to {player.DisplayName} because he spawned as a tutorial and based on the specified config he should see all of the map (ssbadbs : {shouldSpectatorsBeAffectedByPDS})");
 
-                foreach (PrimitiveCluster cluster in schematic.primitiveClusters)
+                foreach (ElementCluster cluster in schematic.elementClusters)
                 {
                   if (cluster.instantSpawn)
                   {
@@ -363,7 +405,7 @@ namespace MEROptimizer.Application
                   else
                   {
                     cluster.awaitingSpawn.Remove(player);
-                    cluster.awaitingSpawn.Add(player, cluster.primitives.ToList());
+                    cluster.awaitingSpawn.Add(player, cluster.elements.ToList());
                     cluster.spawning = true;
                   }
 
@@ -378,7 +420,7 @@ namespace MEROptimizer.Application
           foreach (OptimizedSchematic schematic in optimizedSchematics)
           {
             MEROptimizer.Debug($"Unspawning all clusters of {schematic.schematic.Name} to {player.DisplayName} because he just changed role (ssbadbs : {shouldSpectatorsBeAffectedByPDS})");
-            foreach (PrimitiveCluster cluster in schematic.primitiveClusters)
+            foreach (ElementCluster cluster in schematic.elementClusters)
             {
               if (!cluster.insidePlayers.Contains(player))
               {
@@ -398,7 +440,7 @@ namespace MEROptimizer.Application
                 {
                   MEROptimizer.Debug($"Spawning all clusters (as a fade spawn) of {schematic.schematic.Name} to {player.DisplayName} because he spawned as a filmaker ( why ) and based on the specified config he should see all of the map (ssbadbs : {shouldSpectatorsBeAffectedByPDS})");
 
-                  foreach (PrimitiveCluster cluster in schematic.primitiveClusters)
+                  foreach (ElementCluster cluster in schematic.elementClusters)
                   {
                     if (cluster.instantSpawn)
                     {
@@ -407,7 +449,7 @@ namespace MEROptimizer.Application
                     else
                     {
                       cluster.awaitingSpawn.Remove(player);
-                      cluster.awaitingSpawn.Add(player, cluster.primitives.ToList());
+                      cluster.awaitingSpawn.Add(player, cluster.elements.ToList());
                       cluster.spawning = true;
                     }
 
@@ -430,7 +472,7 @@ namespace MEROptimizer.Application
 
       foreach (OptimizedSchematic schematic in optimizedSchematics)
       {
-        foreach (PrimitiveCluster cluster in schematic.primitiveClusters)
+        foreach (ElementCluster cluster in schematic.elementClusters)
         {
           if (oldTarget != null && (cluster.insidePlayers.Contains(oldTarget) && !cluster.insidePlayers.Contains(newTarget)))
           {
@@ -471,92 +513,130 @@ namespace MEROptimizer.Application
         parentsToExlude.Add(anim.transform);
       }
 
-
-
       Dictionary<PrimitiveObjectToy, bool> primitivesToOptimize = GetPrimitivesToOptimize(ev.Schematic.transform, parentsToExlude);
 
-      if (primitivesToOptimize == null || primitivesToOptimize.IsEmpty()) return;
-
-      Dictionary<ClientSidePrimitive, bool> clientSidePrimitive = new Dictionary<ClientSidePrimitive, bool>();
-
-      List<Collider> serverSideColliders = new List<Collider>();
-
-      List<PrimitiveObjectToy> primitivesToDestroy = new List<PrimitiveObjectToy>();
-
-      foreach (PrimitiveObjectToy primitive in primitivesToOptimize.Keys.ToList())
+      if (primitivesToOptimize != null && !primitivesToOptimize.IsEmpty())
       {
-        // Retrieve data
-        Vector3 position = primitive.transform.position;
-        Quaternion rotation = primitive.transform.rotation;
-        Vector3 scale = primitive.transform.lossyScale;
-        PrimitiveType primitiveType = primitive.PrimitiveType;
-        Color color = primitive.NetworkMaterialColor;
-        PrimitiveFlags primitiveFlags = primitive.PrimitiveFlags;
+        Dictionary<IClientSideElement, bool> clientSidePrimitive = new Dictionary<IClientSideElement, bool>();
 
+        List<Collider> serverSideColliders = new List<Collider>();
 
-        // store the data about the primitive
-        clientSidePrimitive.Add(new ClientSidePrimitive(position, rotation, scale, primitiveType, color, primitiveFlags), primitivesToOptimize[primitive]);
+        List<PrimitiveObjectToy> primitivesToDestroy = new List<PrimitiveObjectToy>();
 
-        // Add collider for the server if the primitive is collidable
-        if (primitiveFlags.HasFlag(PrimitiveFlags.Collidable))
+        foreach (PrimitiveObjectToy primitive in primitivesToOptimize.Keys.ToList())
         {
-          GameObject collider = new GameObject();
-          collider.transform.localScale = new Vector3(Math.Abs(scale.x), Math.Abs(scale.y), Math.Abs(scale.z));
-          collider.transform.position = position;
-          collider.transform.rotation = rotation;
-          collider.transform.name = $"[MEROCOLLIDER] {primitive.transform.name}";
+          // Retrieve data
+          Vector3 position = primitive.transform.position;
+          Quaternion rotation = primitive.transform.rotation;
+          Vector3 scale = primitive.transform.lossyScale;
+          PrimitiveType primitiveType = primitive.PrimitiveType;
+          Color color = primitive.NetworkMaterialColor;
+          PrimitiveFlags primitiveFlags = primitive.PrimitiveFlags;
 
-          //In order to get the collider to work with cedmod
-          collider.gameObject.layer = (color.a < 1 ? LayerMask.NameToLayer("Glass") : 0);
 
-          MeshCollider meshCollider = collider.AddComponent<MeshCollider>();
-          meshCollider.sharedMesh = PrimitiveObjectToy.PrimitiveTypeToMesh[primitiveType];
+          // store the data about the primitive
+          clientSidePrimitive.Add(new ClientSidePrimitive(position, rotation, scale, primitiveType, color, primitiveFlags), primitivesToOptimize[primitive]);
 
-          if (meshCollider != null) serverSideColliders.Add(meshCollider);
-          else UnityEngine.Object.Destroy(collider);
+          // Add collider for the server if the primitive is collidable
+          if (primitiveFlags.HasFlag(PrimitiveFlags.Collidable))
+          {
+            GameObject collider = new GameObject();
+            collider.transform.localScale = new Vector3(Math.Abs(scale.x), Math.Abs(scale.y), Math.Abs(scale.z));
+            collider.transform.position = position;
+            collider.transform.rotation = rotation;
+            collider.transform.name = $"[MEROCOLLIDER] {primitive.transform.name}";
+
+            //In order to get the collider to work with cedmod
+            collider.gameObject.layer = (color.a < 1 ? LayerMask.NameToLayer("Glass") : 0);
+
+            MeshCollider meshCollider = collider.AddComponent<MeshCollider>();
+            meshCollider.sharedMesh = PrimitiveObjectToy.PrimitiveTypeToMesh[primitiveType];
+
+            if (meshCollider != null) serverSideColliders.Add(meshCollider);
+            else UnityEngine.Object.Destroy(collider);
+          }
+
+          primitivesToDestroy.Add(primitive);
         }
 
-        primitivesToDestroy.Add(primitive);
-      }
+        // Store the client side primitive / server side colliders
 
-      // Store the client side primitive / server side colliders
+        float distanceForClusterSpawn = distanceRequiredForUnspawning;
 
-      float distanceForClusterSpawn = distanceRequiredForUnspawning;
+        if (CustomSchematicSpawnDistance.TryGetValue(ev.Schematic.Name, out float customDistance))
+        {
+          distanceForClusterSpawn = customDistance;
+        }
 
-      if (CustomSchematicSpawnDistance.TryGetValue(ev.Schematic.Name, out float customDistance))
-      {
-        distanceForClusterSpawn = customDistance;
-      }
-
-      OptimizedSchematic schematic = new OptimizedSchematic(ev.Schematic, serverSideColliders, clientSidePrimitive,
+        OptimizedSchematic schematic = new OptimizedSchematic(ev.Schematic, serverSideColliders, clientSidePrimitive,
         hideDistantPrimitives, distanceForClusterSpawn, excludedNamesForUnspawningDistantObjects,
         maxDistanceForPrimitiveCluster, maxPrimitivesPerCluster);
 
-      optimizedSchematics.Add(schematic);
+        optimizedSchematics.Add(schematic);
 
+        if (ev.Schematic == null) return;
 
+        foreach (PrimitiveObjectToy primitive in primitivesToDestroy)
+        {
+          if (primitive == null) continue;
+          //ev.Schematic._attachedBlocks.Remove(primitive.gameObject);
+          GameObject.Destroy(primitive.gameObject);
+        }
+        Timing.CallDelayed(1f, () =>
+        {
 
-      if (ev.Schematic == null) return;
-
-      foreach (PrimitiveObjectToy primitive in primitivesToDestroy)
-      {
-        if (primitive == null) continue;
-        //ev.Schematic._attachedBlocks.Remove(primitive.gameObject);
-        GameObject.Destroy(primitive.gameObject);
+          if (ev.Schematic == null || schematic == null) return;
+          schematic.schematicServerSideElmentCount = ev.Schematic.GetComponentsInChildren<PrimitiveObjectToy>().Count(p => p != null);
+          schematic.schematicServerEmptiesElementSideCount = ev.Schematic.GetComponentsInChildren<PrimitiveObjectToy>().Count(p => p != null && p.PrimitiveFlags == PrimitiveFlags.None);
+        });
+        //DestroyPrimitives(ev.Schematic, primitivesToDestroy);
       }
-      Timing.CallDelayed(1f, () =>
+
+      Dictionary<LightSourceToy, bool> lightToOptimize = GetLightsToOptimize(ev.Schematic.transform, parentsToExlude);
+
+      if (lightToOptimize != null && !lightToOptimize.IsEmpty())
       {
+        Dictionary<IClientSideElement, bool> clientSideLight = new Dictionary<IClientSideElement, bool>();
 
-        if (ev.Schematic == null || schematic == null) return;
-        schematic.schematicServerSidePrimitiveCount = ev.Schematic.GetComponentsInChildren<PrimitiveObjectToy>().Where(p => p != null).Count();
-        schematic.schematicServerSidePrimitiveEmptiesCount = ev.Schematic.GetComponentsInChildren<PrimitiveObjectToy>().Where(p => p != null && p.PrimitiveFlags == PrimitiveFlags.None).Count();
+        List<Collider> serverSideColliders = new List<Collider>();
 
-      });
+        List<LightSourceToy> LightToDestroy = new List<LightSourceToy>();
 
-      //DestroyPrimitives(ev.Schematic, primitivesToDestroy);
+        foreach (LightSourceToy light in lightToOptimize.Keys.ToList())
+        {
+          clientSideLight.Add(new ClientSideLight(light), lightToOptimize[light]);
+          LightToDestroy.Add(light);
+        }
 
+        float distanceForClusterSpawn = distanceRequiredForUnspawning;
+        if (CustomSchematicSpawnDistance.TryGetValue(ev.Schematic.Name, out float customDistance))
+        {
+          distanceForClusterSpawn = customDistance;
+        }
+
+        OptimizedSchematic schematic = new OptimizedSchematic(ev.Schematic, serverSideColliders, clientSideLight,
+        hideDistantPrimitives, distanceForClusterSpawn, excludedNamesForUnspawningDistantObjects,
+        maxDistanceForPrimitiveCluster, maxPrimitivesPerCluster);
+
+        optimizedSchematics.Add(schematic);
+
+        if (ev.Schematic == null) return;
+
+        foreach (LightSourceToy light in LightToDestroy)
+        {
+          if (light == null) continue;
+          GameObject.Destroy(light.gameObject);
+        }
+        Timing.CallDelayed(1f, () =>
+        {
+
+          if (ev.Schematic == null || schematic == null) return;
+          schematic.schematicServerSideElmentCount = ev.Schematic.GetComponentsInChildren<LightSourceToy>().Count(p => p != null);
+          schematic.schematicServerEmptiesElementSideCount = 0;
+
+        });
+      }
     }
-
 
     private void OnSchematicDestroyed(SchematicDestroyedEventArgs ev)
     {

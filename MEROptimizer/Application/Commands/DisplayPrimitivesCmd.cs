@@ -47,7 +47,7 @@ namespace MEROptimizer.Application.Commands
         if (display) hiddenSchematics.Add(optimizedSchematic);
         optimizedSchematic.HideFor(player);
 
-        foreach (PrimitiveCluster cluster in optimizedSchematic.primitiveClusters)
+        foreach (ElementCluster cluster in optimizedSchematic.elementClusters)
         {
           cluster.UnspawnFor(player);
         }
@@ -61,7 +61,7 @@ namespace MEROptimizer.Application.Commands
           {
             optimizedSchematic.RefreshFor(player);
 
-            foreach (PrimitiveCluster cluster in optimizedSchematic.primitiveClusters)
+            foreach (ElementCluster cluster in optimizedSchematic.elementClusters)
             {
               cluster.SpawnFor(player);
             }

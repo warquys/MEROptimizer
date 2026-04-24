@@ -32,8 +32,8 @@ namespace MEROptimizer.Application.Commands
 
       foreach (OptimizedSchematic os in Plugin.merOptimizer.optimizedSchematics)
       {
-        serverSidePrimitives += os.schematicServerSidePrimitiveCount;
-        clientSidePrimitives += os.GetTotalPrimitiveCount();
+        serverSidePrimitives += os.schematicServerSideElmentCount;
+        clientSidePrimitives += os.GetTotalElementCount();
       }
 
       message = $"Total of server sided primitives : {serverSidePrimitives}\n" +
@@ -46,11 +46,11 @@ namespace MEROptimizer.Application.Commands
         message +=
           $"Schematic : {os.schematic.name}\n" +
           $"Spawned at {os.spawnTime.ToLongTimeString()}\n" +
-          $"Total primitive count : {os.GetTotalPrimitiveCount() + os.schematicServerSidePrimitiveCount}\n" +
-          $"Client side primitive count: {os.GetTotalPrimitiveCount()}\n" +
-          $"Server side primitive count: {os.schematicServerSidePrimitiveCount}\n" +
+          $"Total primitive count : {os.GetTotalElementCount() + os.schematicServerSideElmentCount}\n" +
+          $"Client side primitive count: {os.GetTotalElementCount()}\n" +
+          $"Server side primitive count: {os.schematicServerSideElmentCount}\n" +
           $"Number of server side colliders : {os.colliders.Count}\n" +
-          $"Number of clusters : {os.primitiveClusters.Count}\n----------------\n";
+          $"Number of clusters : {os.elementClusters.Count}\n----------------\n";
       }
 
       response = message != "" ? message : "No information to display";

@@ -1,22 +1,23 @@
-﻿using AdminToys;
-using LabApi.Features.Wrappers;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using AdminToys;
+using LabApi.Features.Wrappers;
+using MEROptimizer.MEROptimizer.Application.Components;
 using UnityEngine;
 
 namespace MEROptimizer.Application.Components
 {
-  public class PrimitiveCluster : MonoBehaviour
+  public class ElementCluster : MonoBehaviour
   {
     public int id { get; set; }
-    public List<ClientSidePrimitive> primitives { get; set; }
+    public List<IClientSideElement> elements { get; set; }
 
     public ClientSidePrimitive displayClusterPrimitive { get; set; }
 
-    public Dictionary<Player, List<ClientSidePrimitive>> awaitingSpawn = new Dictionary<Player, List<ClientSidePrimitive>>();
+    public Dictionary<Player, List<IClientSideElement>> awaitingSpawn = new Dictionary<Player, List<IClientSideElement>>();
 
     public List<Player> insidePlayers = new List<Player>();
 
@@ -51,7 +52,7 @@ namespace MEROptimizer.Application.Components
 
     public void OnDestroy()
     {
-      foreach (ClientSidePrimitive primitive in primitives)
+      foreach (ClientSidePrimitive primitive in elements)
       {
         primitive.DestroyForEveryone();
       }
@@ -86,7 +87,7 @@ namespace MEROptimizer.Application.Components
         {
           awaitingSpawn.Remove(player);
 
-          awaitingSpawn.Add(player, primitives.ToList());
+          awaitingSpawn.Add(player, elements.ToList());
 
           spawning = true;
         }
@@ -119,7 +120,7 @@ namespace MEROptimizer.Application.Components
 
       foreach (Player player in awaitingSpawn.Keys.ToList())
       {
-        List<ClientSidePrimitive> list = awaitingSpawn[player];
+        List<IClientSideElement> list = awaitingSpawn[player];
 
         if (list.IsEmpty())
         {
@@ -131,17 +132,17 @@ namespace MEROptimizer.Application.Components
 
         for (int i = 0; i < (multiFrameSpawn ? 1 : numberOfPrimitivePerSpawn); i++)
         {
-          ClientSidePrimitive prim = list.FirstOrDefault();
+          IClientSideElement prim = list.FirstOrDefault();
 
           if (prim == null) break;
 
           list.Remove(prim);
 
-          prim.SpawnClientPrimitive(player);
+          prim.SpawnClient(player);
 
           foreach (Player p in spectatingPlayers)
           {
-            prim.SpawnClientPrimitive(p);
+            prim.SpawnClient(p);
           }
         }
 
@@ -178,10 +179,10 @@ namespace MEROptimizer.Application.Components
     public void SpawnFor(Player player)
     {
       if (player == null || player.IsNpc) return;
-      foreach (ClientSidePrimitive primitive in primitives)
+      foreach (IClientSideElement element in elements)
       {
 
-        primitive.SpawnClientPrimitive(player);
+        element.SpawnClient(player);
       }
     }
 
@@ -192,25 +193,25 @@ namespace MEROptimizer.Application.Components
       awaitingSpawn.Remove(player);
 
       List<Player> spectatingPlayers = player.CurrentSpectators;
-      foreach (ClientSidePrimitive primitive in primitives)
+      foreach (IClientSideElement element in elements)
       {
-        primitive.DestroyClientPrimitive(player);
+        element.DestroyClient(player);
 
         foreach (Player p in spectatingPlayers)
         {
-          primitive.DestroyClientPrimitive(p);
+          element.DestroyClient(p);
         }
       }
     }
 
     public void DisplayRadius(Player player)
     {
-      displayClusterPrimitive?.SpawnClientPrimitive(player);
+      displayClusterPrimitive?.SpawnClient(player);
     }
 
     public void HideRadius(Player player)
     {
-      displayClusterPrimitive?.DestroyClientPrimitive(player);
+      displayClusterPrimitive?.DestroyClient(player);
     }
   }
 }

@@ -32,16 +32,16 @@ namespace MEROptimizer.Application.Components
 
         foreach (OptimizedSchematic schematic in Plugin.merOptimizer.optimizedSchematics)
         {
-          count += schematic.nonClusteredPrimitives.Count;
-          totalPrimitiveCount += (schematic.schematicServerSidePrimitiveCount + schematic.nonClusteredPrimitives.Count);
-          foreach (PrimitiveCluster cluster in schematic.primitiveClusters)
+          count += schematic.nonClusteredElement.Count;
+          totalPrimitiveCount += (schematic.schematicServerSideElmentCount + schematic.nonClusteredElement.Count);
+          foreach (ElementCluster cluster in schematic.elementClusters)
           {
             if (cluster.insidePlayers.Contains(player))
             {
-              count += cluster.primitives.Count;
+              count += cluster.elements.Count;
             }
 
-            totalPrimitiveCount += cluster.primitives.Count;
+            totalPrimitiveCount += cluster.elements.Count;
           }
         }
 

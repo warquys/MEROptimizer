@@ -49,11 +49,13 @@
     <Compile Include="MEROptimizer\Application\Commands\RealTimePrimitiveCountCmd.cs" />
     <Compile Include="MEROptimizer\Application\Commands\InfoCmd.cs" />
     <Compile Include="MEROptimizer\Application\Commands\DisplayPrimitivesCmd.cs" />
+    <Compile Include="MEROptimizer\Application\Components\ClientSideLight.cs" />
     <Compile Include="MEROptimizer\Application\Components\ClientSidePrimitive.cs" />
+    <Compile Include="MEROptimizer\Application\Components\IClientSideElement.cs" />
     <Compile Include="MEROptimizer\Application\Components\OptimizedSchematic.cs" />
     <Compile Include="MEROptimizer\Application\Components\PlayerDisplayHint.cs" />
     <Compile Include="MEROptimizer\Application\Components\PlayerTrigger.cs" />
-    <Compile Include="MEROptimizer\Application\Components\PrimitiveCluster.cs" />
+    <Compile Include="MEROptimizer\Application\Components\ElementCluster.cs" />
     <Compile Include="MEROptimizer\Application\MEROptimizer.cs" />
     <Compile Include="MEROptimizer\Config.cs" />
     <Compile Include="MEROptimizer\Plugin.cs" />
@@ -112,6 +114,9 @@
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>deps\UnityEngine.PhysicsModule.dll</HintPath>
     </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include=".editorconfig" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

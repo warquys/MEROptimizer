@@ -31,11 +31,11 @@ namespace MEROptimizer.Application.Commands
       {
         message +=
           $"Schematic : {os.schematic.name}\n" +
-          $"Number of clusters : {os.primitiveClusters.Count}";
+          $"Number of clusters : {os.elementClusters.Count}";
 
-        foreach (PrimitiveCluster cluster in os.primitiveClusters)
+        foreach (ElementCluster cluster in os.elementClusters)
         {
-          message += $"\nId : {cluster.id} | Pos : {cluster.transform.position} | Number of primitives : {cluster.primitives.Count}";
+          message += $"\nId : {cluster.id} | Pos : {cluster.transform.position} | Number of primitives : {cluster.elements.Count}";
         }
       }
 

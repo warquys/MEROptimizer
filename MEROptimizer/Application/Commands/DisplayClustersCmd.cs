@@ -43,7 +43,7 @@ namespace MEROptimizer.Application.Commands
       {
         if (display)
         {
-          foreach (PrimitiveCluster cluster in optimizedSchematic.primitiveClusters)
+          foreach (ElementCluster cluster in optimizedSchematic.elementClusters)
           {
             cluster.HideRadius(player);
             cluster.DisplayRadius(player);
@@ -51,7 +51,7 @@ namespace MEROptimizer.Application.Commands
         }
         else
         {
-          foreach (PrimitiveCluster cluster in optimizedSchematic.primitiveClusters)
+          foreach (ElementCluster cluster in optimizedSchematic.elementClusters)
           {
             cluster.HideRadius(player);
           }

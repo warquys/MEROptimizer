@@ -1,15 +1,16 @@
-﻿using Logger = LabApi.Features.Console.Logger;
-using LabApi.Features.Wrappers;
-using MEC;
-using PlayerRoles;
-using ProjectMER.Features.Objects;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using LabApi.Features.Wrappers;
+using MEC;
+using MEROptimizer.MEROptimizer.Application.Components;
+using PlayerRoles;
+using ProjectMER.Features.Objects;
 using UnityEngine;
 using static PlayerList;
+using Logger = LabApi.Features.Console.Logger;
 
 namespace MEROptimizer.Application.Components
 {
@@ -21,147 +22,143 @@ namespace MEROptimizer.Application.Components
 
     public List<Collider> colliders { get; set; }
 
-    public List<ClientSidePrimitive> nonClusteredPrimitives { get; set; }
+    public List<IClientSideElement> nonClusteredElement { get; set; }
 
-    public List<PrimitiveCluster> primitiveClusters { get; set; }
+    public List<ElementCluster> elementClusters { get; set; }
 
     public DateTime spawnTime { get; set; }
 
-    public int schematicServerSidePrimitiveEmptiesCount = -1;
+    public int schematicServerEmptiesElementSideCount { get; set; } = -1;
 
-    public int schematicServerSidePrimitiveCount { get; set; } = -1;
+    public int schematicServerSideElmentCount { get; set; } = -1;
 
-    public int GetTotalPrimitiveCount()
+    public int GetTotalElementCount()
     {
-      int count = nonClusteredPrimitives.Count;
+      int count = nonClusteredElement.Count;
 
-      foreach (PrimitiveCluster cluster in primitiveClusters)
+      foreach (ElementCluster cluster in elementClusters)
       {
-        count += cluster.primitives.Count;
+        count += cluster.elements.Count;
       }
 
       return count;
     }
 
-    public OptimizedSchematic(SchematicObject schematic, List<Collider> colliders, Dictionary<ClientSidePrimitive, bool> primitives,
-      bool doClusters = false, float distance = 50, List<string> excludedUnspawnObjects = null, float maxDistanceForPrimitiveCluster = 2.5f,
-      int maxPrimitivesPerCluster = 100)
+    public OptimizedSchematic(SchematicObject schematic, List<Collider> colliders, Dictionary<IClientSideElement, bool> elements,
+      bool doClusters = false, float distance = 50, List<string> excludedUnspawnObjects = null, float maxDistanceForElementCluster = 2.5f,
+      int maxElementsPerCluster = 100)
     {
-
-
       this.schematic = schematic;
       this.colliders = colliders;
       spawnTime = DateTime.Now;
 
       schematicName = schematic.name;
 
-      nonClusteredPrimitives = new List<ClientSidePrimitive>();
-      primitiveClusters = new List<PrimitiveCluster>();
+      nonClusteredElement = new List<IClientSideElement>();
+      elementClusters = new List<ElementCluster>();
 
-      GenerateClustersAndSpawn(doClusters, primitives, distance, excludedUnspawnObjects, maxDistanceForPrimitiveCluster, maxPrimitivesPerCluster);
-
+      GenerateClustersAndSpawn(doClusters, elements, distance, excludedUnspawnObjects, maxDistanceForElementCluster, maxElementsPerCluster);
     }
 
-    private void GenerateClustersAndSpawn(bool doClusters, Dictionary<ClientSidePrimitive, bool> primitives,
-      float distance, List<string> excludedUnspawnObjects, float maxDistanceForPrimitiveCluster, int maxPrimitivesPerCluster)
+    private void GenerateClustersAndSpawn(bool doClusters, Dictionary<IClientSideElement, bool> elements,
+      float distance, List<string> excludedUnspawnObjects, float maxDistanceForElementCluster, int maxElementsPerCluster)
     {
       if (!doClusters)
       {
-        foreach (ClientSidePrimitive primitive in primitives.Keys)
+        foreach (IClientSideElement element in elements.Keys)
         {
-          nonClusteredPrimitives.Add(primitive);
+          nonClusteredElement.Add(element);
         }
       }
       else
       {
 
         // Remove non clustered primitives and big objects
-        foreach (ClientSidePrimitive primitive in primitives.Keys.ToList())
+        foreach (IClientSideElement element in elements.Keys.ToList())
         {
-          if (!primitives[primitive])
+          if (!elements[element])
           {
-            nonClusteredPrimitives.Add(primitive);
-            primitives.Remove(primitive);
+            nonClusteredElement.Add(element);
+            elements.Remove(element);
           }
           else
           {
-            if (MEROptimizer.MinimumSizeBeforeBeingBigPrimitive > 0)
+            if (MEROptimizer.MinimumSizeBeforeBeingBigElement > 0)
             {
-              Vector3 size = primitive.scale;
+              Vector3 size = element.scale;
 
-              if (Math.Abs(size.x) + Math.Abs(size.y) + Math.Abs(size.z) > MEROptimizer.MinimumSizeBeforeBeingBigPrimitive)
+              if (Math.Abs(size.x) + Math.Abs(size.y) + Math.Abs(size.z) > MEROptimizer.MinimumSizeBeforeBeingBigElement)
               {
-                nonClusteredPrimitives.Add(primitive);
-                primitives.Remove(primitive);
+                nonClusteredElement.Add(element);
+                elements.Remove(element);
               }
             }
           }
         }
 
-        if (!primitives.IsEmpty())
+        if (!elements.IsEmpty())
         {
 
           // Calculate the center of the schematic, where the first cluster will spawn
           Vector3 center3D = Vector3.zero;
-          foreach (ClientSidePrimitive p in primitives.Keys)
+          foreach (IClientSideElement p in elements.Keys)
           {
             center3D += p.position;
           }
 
-          center3D /= primitives.Count;
+          center3D /= elements.Count;
 
-          // Sort the primitives by their distance with the center
-          List<ClientSidePrimitive> sortedPrimitives = primitives.Keys.ToList();
-          sortedPrimitives = sortedPrimitives.OrderBy(s => Vector3.Distance(s.position, center3D)).ToList();
+          // Sort the elements by their distance with the center
+          List<IClientSideElement> sortedElements = elements.Keys.ToList();
+          sortedElements = sortedElements.OrderBy(s => Vector3.Distance(s.position, center3D)).ToList();
 
-          Dictionary<int, List<ClientSidePrimitive>> clusters = new Dictionary<int, List<ClientSidePrimitive>>();
+          Dictionary<int, List<IClientSideElement>> clusters = new Dictionary<int, List<IClientSideElement>>();
 
           int clusterNumber = 1;
 
-          // Creates clusters, add the primitives to the clusters until all clusters are generated
-          while (sortedPrimitives.Count > 0)
+          // Creates clusters, add the elements to the clusters until all clusters are generated
+          while (sortedElements.Count > 0)
           {
 
-            ClientSidePrimitive closestFromCenterPrimitive = sortedPrimitives.First();
+            IClientSideElement closestFromCenterElement = sortedElements.First();
 
-            List<ClientSidePrimitive> clusterPrimitives = new List<ClientSidePrimitive>() { closestFromCenterPrimitive };
+            List<IClientSideElement> clusterElements = new List<IClientSideElement>() { closestFromCenterElement };
 
-            List<ClientSidePrimitive> sortedPrimitiveByCluster = sortedPrimitives.ToList();
+            List<IClientSideElement> sortedElementByCluster = sortedElements.ToList();
 
-            Vector3 centerPos = closestFromCenterPrimitive.position;
+            Vector3 centerPos = closestFromCenterElement.position;
 
-            // Keep all of the primitives where their distance correspond
-            sortedPrimitiveByCluster.RemoveAll(p =>
-            Vector3.Distance(p.position, centerPos) > maxDistanceForPrimitiveCluster);
+            // Keep all of the elements where their distance correspond
+            sortedElementByCluster.RemoveAll(p =>
+            Vector3.Distance(p.position, centerPos) > maxDistanceForElementCluster);
 
-            // Remove excess primitives based on config
-            if (sortedPrimitiveByCluster.Count > maxPrimitivesPerCluster)
+            // Remove excess elements based on config
+            if (sortedElementByCluster.Count > maxElementsPerCluster)
             {
-              sortedPrimitiveByCluster = sortedPrimitiveByCluster.OrderBy(s => Vector3.Distance(s.position, centerPos)).ToList();
-              sortedPrimitiveByCluster.RemoveRange(maxPrimitivesPerCluster, sortedPrimitiveByCluster.Count - maxPrimitivesPerCluster);
+              sortedElementByCluster = sortedElementByCluster.OrderBy(s => Vector3.Distance(s.position, centerPos)).ToList();
+              sortedElementByCluster.RemoveRange(maxElementsPerCluster, sortedElementByCluster.Count - maxElementsPerCluster);
             }
 
 
-            clusterPrimitives.AddRange(sortedPrimitiveByCluster);
+            clusterElements.AddRange(sortedElementByCluster);
 
-            sortedPrimitives.RemoveAll(p => clusterPrimitives.Contains(p));
+            sortedElements.RemoveAll(p => clusterElements.Contains(p));
 
-            // sort the primitives on their y value, so that the first to spawn will be the bottom ones
+            // sort the elements on their y value, so that the first to spawn will be the bottom ones
+            clusterElements = clusterElements.OrderBy(p => p.position.y).ToList();
 
-            clusterPrimitives = clusterPrimitives.OrderBy(p => p.position.y).ToList();
-
-            clusters.Add(clusterNumber++, clusterPrimitives);
+            clusters.Add(clusterNumber++, clusterElements);
           }
 
           //Creates the Gameobjects for the clusters
-          foreach (KeyValuePair<int, List<ClientSidePrimitive>> cluster in clusters)
+          foreach (KeyValuePair<int, List<IClientSideElement>> cluster in clusters)
           {
             // Get the center of the cluster
 
             Vector3 center = Vector3.zero;
-            foreach (ClientSidePrimitive primitive in cluster.Value)
+            foreach (IClientSideElement element in cluster.Value)
             {
-              center += primitive.position;
+              center += element.position;
             }
 
             center /= cluster.Value.Count;
@@ -178,20 +175,19 @@ namespace MEROptimizer.Application.Components
             collider.radius = distance;
             collider.isTrigger = true;
 
-            PrimitiveCluster primitiveCluster = gameObject.AddComponent<PrimitiveCluster>();
-            primitiveCluster.id = cluster.Key;
-            primitiveCluster.primitives = cluster.Value;
+            ElementCluster elementCluster = gameObject.AddComponent<ElementCluster>();
+            elementCluster.id = cluster.Key;
+            elementCluster.elements = cluster.Value;
 
-            primitiveClusters.Add(primitiveCluster);
+            elementClusters.Add(elementCluster);
           }
         }
       }
 
-      // Spawn of primitives
-
-      foreach (ClientSidePrimitive primitive in nonClusteredPrimitives)
+      // Spawn of elements
+      foreach (IClientSideElement element in nonClusteredElement)
       {
-        primitive.SpawnForEveryone();
+        element.SpawnForEveryone();
       }
 
 
@@ -227,7 +223,7 @@ namespace MEROptimizer.Application.Components
 
           if (shouldSpawn)
           {
-            foreach (PrimitiveCluster cluster in primitiveClusters)
+            foreach (ElementCluster cluster in elementClusters)
             {
               if (cluster.instantSpawn)
               {
@@ -236,7 +232,7 @@ namespace MEROptimizer.Application.Components
               else
               {
                 cluster.awaitingSpawn.Remove(player);
-                cluster.awaitingSpawn.Add(player, cluster.primitives.ToList());
+                cluster.awaitingSpawn.Add(player, cluster.elements.ToList());
                 cluster.spawning = true;
               }
             }
@@ -250,9 +246,9 @@ namespace MEROptimizer.Application.Components
     {
       HideFor(player, false);
 
-      foreach (ClientSidePrimitive primitive in nonClusteredPrimitives)
+      foreach (IClientSideElement element in nonClusteredElement)
       {
-        primitive.SpawnClientPrimitive(player);
+        element.SpawnClient(player);
       }
       MEROptimizer.Debug($"Refresh the schematic {this.schematicName} for {player.DisplayName} !");
     }
@@ -262,34 +258,32 @@ namespace MEROptimizer.Application.Components
       if (player == null) return;
       if (showDebug)
       {
-        MEROptimizer.Debug($"Hiding client side primitives of {this.schematicName} to {player.DisplayName}");
+        MEROptimizer.Debug($"Hiding client side elements of {this.schematicName} to {player.DisplayName}");
       }
 
-      foreach (ClientSidePrimitive primitive in nonClusteredPrimitives)
+      foreach (IClientSideElement element in nonClusteredElement)
       {
-        primitive.DestroyClientPrimitive(player);
+        element.DestroyClient(player);
       }
     }
 
-
-
-    public void SpawnClientPrimitivesToAll()
+    public void SpawnClientElementsToAll()
     {
-      MEROptimizer.Debug($"Displaying {schematicName}'s client side primitives !");
+      MEROptimizer.Debug($"Displaying {schematicName}'s client side element !");
       foreach (Player player in Player.List.Where(p => p != null && !p.IsNpc))
       {
-        SpawnClientPrimitives(player);
+        SpawnClientElements(player);
       }
     }
 
-    public void SpawnClientPrimitives(Player player)
+    public void SpawnClientElements(Player player)
     {
       if (player == null) return;
 
-      MEROptimizer.Debug($"Displaying client side primitives of {this.schematicName} to {player.DisplayName}");
-      foreach (ClientSidePrimitive primitive in nonClusteredPrimitives)
+      MEROptimizer.Debug($"Displaying client side elements of {this.schematicName} to {player.DisplayName}");
+      foreach (IClientSideElement element in nonClusteredElement)
       {
-        primitive.SpawnClientPrimitive(player);
+        element.SpawnClient(player);
       }
     }
 
@@ -300,12 +294,12 @@ namespace MEROptimizer.Application.Components
         UnityEngine.Object.Destroy(collider);
       }
 
-      foreach (ClientSidePrimitive primitive in nonClusteredPrimitives)
+      foreach (IClientSideElement primitive in nonClusteredElement)
       {
         primitive.DestroyForEveryone();
       }
 
-      foreach (PrimitiveCluster cluster in primitiveClusters.Where(c => c != null && c.gameObject != null))
+      foreach (ElementCluster cluster in elementClusters.Where(c => c != null && c.gameObject != null))
       {
         UnityEngine.Object.Destroy(cluster);
       }
