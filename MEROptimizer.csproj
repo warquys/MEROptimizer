@@ -98,6 +98,9 @@
     <Reference Include="Mirror-Publicized">
       <HintPath>deps\Mirror-Publicized.dll</HintPath>
     </Reference>
+    <Reference Include="Pooling">
+      <HintPath>deps\Pooling.dll</HintPath>
+    </Reference>
     <Reference Include="ProjectMER">
       <HintPath>deps\ProjectMER.dll</HintPath>
     </Reference>

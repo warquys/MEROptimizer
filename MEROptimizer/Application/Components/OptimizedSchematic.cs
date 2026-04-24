@@ -9,13 +9,14 @@ using MEROptimizer.MEROptimizer.Application.Components;
 using PlayerRoles;
 using ProjectMER.Features.Objects;
 using UnityEngine;
-using static PlayerList;
-using Logger = LabApi.Features.Console.Logger;
 
 namespace MEROptimizer.Application.Components
 {
   public class OptimizedSchematic
   {
+    // ask Math why, do not edit else it break
+    public const float YOffsetForClusterSpawn = 2000;
+
     public SchematicObject schematic { get; set; }
 
     private string schematicName;
@@ -31,6 +32,8 @@ namespace MEROptimizer.Application.Components
     public int schematicServerEmptiesElementSideCount { get; set; } = -1;
 
     public int schematicServerSideElmentCount { get; set; } = -1;
+
+    public float visualDistance { get; set; } 
 
     public int GetTotalElementCount()
     {
@@ -50,6 +53,7 @@ namespace MEROptimizer.Application.Components
     {
       this.schematic = schematic;
       this.colliders = colliders;
+      this.visualDistance = distance;
       spawnTime = DateTime.Now;
 
       schematicName = schematic.name;
@@ -167,7 +171,7 @@ namespace MEROptimizer.Application.Components
 
             GameObject gameObject = new GameObject($"[MERO] PrimitiveCluster_{schematic.name}_{cluster.Key}");
 
-            gameObject.transform.position = center + new Vector3(0, 2000, 0);
+            gameObject.transform.position = center + new Vector3(0, YOffsetForClusterSpawn, 0);
             gameObject.transform.rotation = Quaternion.identity;
             gameObject.transform.localScale = Vector3.one;
 

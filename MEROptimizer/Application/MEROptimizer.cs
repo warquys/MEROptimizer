@@ -3,17 +3,21 @@ using System.Collections.Generic;
 using System.Linq;
 using AdminToys;
 using LabApi.Events.Arguments.PlayerEvents;
+using LabApi.Events.Arguments.Scp079Events;
 using LabApi.Features.Wrappers;
 using MEC;
 using MEROptimizer.Application.Components;
 using MEROptimizer.MEROptimizer.Application.Components;
 using Mirror;
 using PlayerRoles;
+using PlayerRoles.PlayableScps.Scp079;
 using ProjectMER.Events.Arguments;
 using UnityEngine;
 using LightSourceToy = AdminToys.LightSourceToy;
 using Logger = LabApi.Features.Console.Logger;
 using PrimitiveObjectToy = AdminToys.PrimitiveObjectToy;
+using Exiled.Events.EventArgs.Scp079;
+
 #if EXILED
 using Exiled.Events.EventArgs.Player;
 #endif
@@ -82,12 +86,14 @@ namespace MEROptimizer.Application
       Exiled.Events.Handlers.Player.Spawned += OnSpawned;
       Exiled.Events.Handlers.Player.ChangingSpectatedPlayer += OnChangingSpectatedPlayer;
       Exiled.Events.Handlers.Server.WaitingForPlayers += OnWaitingForPlayers;
+      Exiled.Events.Handlers.Scp079.ChangingCamera += OnChangingCamera;
 #else
       // LabAPI Events
       LabApi.Events.Handlers.PlayerEvents.Joined += OnJoined;
       LabApi.Events.Handlers.PlayerEvents.Spawned += OnSpawned;
       LabApi.Events.Handlers.PlayerEvents.ChangedSpectator += OnChangedSpectator;
       LabApi.Events.Handlers.ServerEvents.WaitingForPlayers += OnWaitingForPlayers;
+      LabApi.Events.Handlers.Scp079Events.ChangedCamera += OnScp079ChangedCamera;
 #endif
 
 
@@ -104,12 +110,14 @@ namespace MEROptimizer.Application
       Exiled.Events.Handlers.Player.Spawned += OnSpawned;
       Exiled.Events.Handlers.Player.ChangingSpectatedPlayer += OnChangingSpectatedPlayer;
       Exiled.Events.Handlers.Server.WaitingForPlayers += OnWaitingForPlayers;
+      Exiled.Events.Handlers.Scp079.ChangingCamera -= OnChangingCamera;
 #else
       // LabAPI Events
       LabApi.Events.Handlers.PlayerEvents.Joined += OnJoined;
       LabApi.Events.Handlers.PlayerEvents.Spawned += OnSpawned;
       LabApi.Events.Handlers.PlayerEvents.ChangedSpectator += OnChangedSpectator;
       LabApi.Events.Handlers.ServerEvents.WaitingForPlayers += OnWaitingForPlayers;
+      LabApi.Events.Handlers.Scp079Events.ChangedCamera -= OnScp079ChangedCamera;
 #endif
 
       // MER Events
@@ -247,6 +255,11 @@ namespace MEROptimizer.Application
       OnPlayerChangedSpectator(ev.Player, oldTarget, ev.NewTarget);
     }
 
+    private void OnChangingCamera(ChangingCameraEventArgs ev)
+    {
+      Scp079ChangeCamera(ev.Camera.Position, ev.Player);
+    }
+
 #else
     private void OnJoined(PlayerJoinedEventArgs ev)
     {
@@ -262,6 +275,12 @@ namespace MEROptimizer.Application
     {
       OnPlayerChangedSpectator(ev.Player, ev.OldTarget, ev.NewTarget);
     }
+
+    private void OnScp079ChangedCamera(Scp079ChangedCameraEventArgs ev)
+    {
+      Scp079ChangeCamera(ev.Camera.Position, ev.Player);
+    }
+
 #endif
     private void OnWaitingForPlayers()
     {
@@ -301,6 +320,25 @@ namespace MEROptimizer.Application
     }
 
     //--------------- Events EXILED
+    private void Scp079ChangeCamera(Vector3 newPos, Player scp)
+    {
+      // magic value, set in OptimizedSchematic, idk what that mean
+      newPos += new Vector3(0, OptimizedSchematic.YOffsetForClusterSpawn, 0);
+      foreach (OptimizedSchematic optimizedSchematic in Plugin.merOptimizer.optimizedSchematics)
+      {
+        foreach (ElementCluster cluster in optimizedSchematic.elementClusters)
+        {
+          if (Vector3.Distance(newPos, cluster.transform.position) <= optimizedSchematic.visualDistance * 20)
+          {
+            cluster.AddPlayer(scp);
+          }
+          else if (cluster.insidePlayers.Contains(scp))
+          {
+            cluster.RemovePlayer(scp);
+          }
+        }
+      }
+    }
 
     private void AddPlayerTrigger(Player player)
     {

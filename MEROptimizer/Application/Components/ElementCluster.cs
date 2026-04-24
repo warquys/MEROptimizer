@@ -19,7 +19,7 @@ namespace MEROptimizer.Application.Components
 
     public Dictionary<Player, List<IClientSideElement>> awaitingSpawn = new Dictionary<Player, List<IClientSideElement>>();
 
-    public List<Player> insidePlayers = new List<Player>();
+    public HashSet<Player> insidePlayers = new HashSet<Player>();
 
     public bool instantSpawn;
 
@@ -77,6 +77,11 @@ namespace MEROptimizer.Application.Components
 
       if (player.Role == PlayerRoles.RoleTypeId.Filmmaker) return;
 
+      AddPlayer(player);
+    }
+
+    public void AddPlayer(Player player)
+    {
       if (!player.IsNpc)
       {
         if (instantSpawn)
@@ -86,9 +91,7 @@ namespace MEROptimizer.Application.Components
         else
         {
           awaitingSpawn.Remove(player);
-
           awaitingSpawn.Add(player, elements.ToList());
-
           spawning = true;
         }
 
@@ -98,7 +101,13 @@ namespace MEROptimizer.Application.Components
       {
         insidePlayers.Add(player);
       }
+    }
 
+    public void RemovePlayer(Player player)
+    {
+      awaitingSpawn.Remove(player);
+      UnspawnFor(player);
+      insidePlayers.Remove(player);
     }
 
     public void Update()
@@ -164,24 +173,15 @@ namespace MEROptimizer.Application.Components
       if (!Application.MEROptimizer.ShouldTutorialsBeAffectedByDistanceSpawning && player.Role == PlayerRoles.RoleTypeId.Tutorial) return;
 
       if (player.Role == PlayerRoles.RoleTypeId.Filmmaker) return;
-
-
-      awaitingSpawn.Remove(player);
-
-      UnspawnFor(player);
-
-      insidePlayers.Remove(player);
-
+      
+      RemovePlayer(player);
     }
-
-    
 
     public void SpawnFor(Player player)
     {
       if (player == null || player.IsNpc) return;
       foreach (IClientSideElement element in elements)
       {
-
         element.SpawnClient(player);
       }
     }
