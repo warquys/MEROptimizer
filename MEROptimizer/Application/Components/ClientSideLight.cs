@@ -50,9 +50,7 @@ namespace MEROptimizer.Application.Components
         light.LightType,
         light.LightShape,
         light.SpotAngle,
-        light.InnerSpotAngle,
-        movementSmoothing,
-        isStatic) { }
+        light.InnerSpotAngle) { }
 
     public ClientSideLight(
       Vector3 position,
@@ -66,9 +64,7 @@ namespace MEROptimizer.Application.Components
       LightType lightType,
       LightShape lightShape,
       float spotAngle,
-      float innerSpotAngle,
-      byte movementSmoothing = 0,
-      bool isStatic = false)
+      float innerSpotAngle)
     {
       this.position = position;
       this.rotation = rotation;

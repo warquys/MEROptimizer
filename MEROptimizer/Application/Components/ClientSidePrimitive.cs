@@ -31,6 +31,15 @@ namespace MEROptimizer.Application.Components
 
     public uint netId { get; set; }
 
+    public ClientSidePrimitive(AdminToys.PrimitiveObjectToy primitive) : this(
+      primitive.transform.position,
+      primitive.transform.rotation,
+      primitive.transform.localScale,
+      primitive.PrimitiveType,
+      primitive.NetworkMaterialColor,
+      primitive.PrimitiveFlags
+      ) { }
+
     public ClientSidePrimitive(
         Vector3 position,
         Quaternion rotation,

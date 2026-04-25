@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using AdminToys;
+using Exiled.Events.EventArgs.Scp079;
 using LabApi.Events.Arguments.PlayerEvents;
 using LabApi.Events.Arguments.Scp079Events;
 using LabApi.Features.Wrappers;
@@ -12,11 +13,11 @@ using Mirror;
 using PlayerRoles;
 using PlayerRoles.PlayableScps.Scp079;
 using ProjectMER.Events.Arguments;
+using ProjectMER.Events.Handlers;
 using UnityEngine;
 using LightSourceToy = AdminToys.LightSourceToy;
 using Logger = LabApi.Features.Console.Logger;
 using PrimitiveObjectToy = AdminToys.PrimitiveObjectToy;
-using Exiled.Events.EventArgs.Scp079;
 
 #if EXILED
 using Exiled.Events.EventArgs.Player;
@@ -551,129 +552,80 @@ namespace MEROptimizer.Application
         parentsToExlude.Add(anim.transform);
       }
 
+      Dictionary<IClientSideElement, bool> clientSideLight = new Dictionary<IClientSideElement, bool>();
+      List<Collider> serverSideColliders = new List<Collider>();
+      List<LightSourceToy> LightToDestroy = new List<LightSourceToy>();
+      List<GameObject> gameObjectToDestroy = new List<GameObject>();
+
       Dictionary<PrimitiveObjectToy, bool> primitivesToOptimize = GetPrimitivesToOptimize(ev.Schematic.transform, parentsToExlude);
 
       if (primitivesToOptimize != null && !primitivesToOptimize.IsEmpty())
       {
-        Dictionary<IClientSideElement, bool> clientSidePrimitive = new Dictionary<IClientSideElement, bool>();
-
-        List<Collider> serverSideColliders = new List<Collider>();
-
-        List<PrimitiveObjectToy> primitivesToDestroy = new List<PrimitiveObjectToy>();
-
-        foreach (PrimitiveObjectToy primitive in primitivesToOptimize.Keys.ToList())
+        foreach (PrimitiveObjectToy primitive in primitivesToOptimize.Keys)
         {
-          // Retrieve data
-          Vector3 position = primitive.transform.position;
-          Quaternion rotation = primitive.transform.rotation;
-          Vector3 scale = primitive.transform.lossyScale;
-          PrimitiveType primitiveType = primitive.PrimitiveType;
-          Color color = primitive.NetworkMaterialColor;
-          PrimitiveFlags primitiveFlags = primitive.PrimitiveFlags;
-
-
           // store the data about the primitive
-          clientSidePrimitive.Add(new ClientSidePrimitive(position, rotation, scale, primitiveType, color, primitiveFlags), primitivesToOptimize[primitive]);
+          clientSideLight.Add(new ClientSidePrimitive(primitive), primitivesToOptimize[primitive]);
 
           // Add collider for the server if the primitive is collidable
-          if (primitiveFlags.HasFlag(PrimitiveFlags.Collidable))
+          if (primitive.PrimitiveFlags.HasFlag(PrimitiveFlags.Collidable))
           {
             GameObject collider = new GameObject();
-            collider.transform.localScale = new Vector3(Math.Abs(scale.x), Math.Abs(scale.y), Math.Abs(scale.z));
-            collider.transform.position = position;
-            collider.transform.rotation = rotation;
+            collider.transform.localScale = primitive.transform.lossyScale.Abs();
+            collider.transform.position = primitive.transform.position;
+            collider.transform.rotation = primitive.transform.rotation;
             collider.transform.name = $"[MEROCOLLIDER] {primitive.transform.name}";
 
             //In order to get the collider to work with cedmod
-            collider.gameObject.layer = (color.a < 1 ? LayerMask.NameToLayer("Glass") : 0);
+            collider.gameObject.layer = (primitive.MaterialColor.a < 1 ? LayerMask.NameToLayer("Glass") : 0);
 
             MeshCollider meshCollider = collider.AddComponent<MeshCollider>();
-            meshCollider.sharedMesh = PrimitiveObjectToy.PrimitiveTypeToMesh[primitiveType];
+            meshCollider.sharedMesh = PrimitiveObjectToy.PrimitiveTypeToMesh[primitive.PrimitiveType];
 
             if (meshCollider != null) serverSideColliders.Add(meshCollider);
             else UnityEngine.Object.Destroy(collider);
           }
 
-          primitivesToDestroy.Add(primitive);
+          gameObjectToDestroy.Add(primitive.gameObject);
         }
-
-        // Store the client side primitive / server side colliders
-
-        float distanceForClusterSpawn = distanceRequiredForUnspawning;
-
-        if (CustomSchematicSpawnDistance.TryGetValue(ev.Schematic.Name, out float customDistance))
-        {
-          distanceForClusterSpawn = customDistance;
-        }
-
-        OptimizedSchematic schematic = new OptimizedSchematic(ev.Schematic, serverSideColliders, clientSidePrimitive,
-        hideDistantPrimitives, distanceForClusterSpawn, excludedNamesForUnspawningDistantObjects,
-        maxDistanceForPrimitiveCluster, maxPrimitivesPerCluster);
-
-        optimizedSchematics.Add(schematic);
-
-        if (ev.Schematic == null) return;
-
-        foreach (PrimitiveObjectToy primitive in primitivesToDestroy)
-        {
-          if (primitive == null) continue;
-          //ev.Schematic._attachedBlocks.Remove(primitive.gameObject);
-          GameObject.Destroy(primitive.gameObject);
-        }
-        Timing.CallDelayed(1f, () =>
-        {
-
-          if (ev.Schematic == null || schematic == null) return;
-          schematic.schematicServerSideElmentCount = ev.Schematic.GetComponentsInChildren<PrimitiveObjectToy>().Count(p => p != null);
-          schematic.schematicServerEmptiesElementSideCount = ev.Schematic.GetComponentsInChildren<PrimitiveObjectToy>().Count(p => p != null && p.PrimitiveFlags == PrimitiveFlags.None);
-        });
-        //DestroyPrimitives(ev.Schematic, primitivesToDestroy);
       }
 
       Dictionary<LightSourceToy, bool> lightToOptimize = GetLightsToOptimize(ev.Schematic.transform, parentsToExlude);
 
       if (lightToOptimize != null && !lightToOptimize.IsEmpty())
       {
-        Dictionary<IClientSideElement, bool> clientSideLight = new Dictionary<IClientSideElement, bool>();
-
-        List<Collider> serverSideColliders = new List<Collider>();
-
-        List<LightSourceToy> LightToDestroy = new List<LightSourceToy>();
-
-        foreach (LightSourceToy light in lightToOptimize.Keys.ToList())
+        foreach (LightSourceToy light in lightToOptimize.Keys)
         {
           clientSideLight.Add(new ClientSideLight(light), lightToOptimize[light]);
           LightToDestroy.Add(light);
         }
+      }
 
-        float distanceForClusterSpawn = distanceRequiredForUnspawning;
-        if (CustomSchematicSpawnDistance.TryGetValue(ev.Schematic.Name, out float customDistance))
-        {
-          distanceForClusterSpawn = customDistance;
-        }
+      float distanceForClusterSpawn = distanceRequiredForUnspawning;
+      if (CustomSchematicSpawnDistance.TryGetValue(ev.Schematic.Name, out float customDistance))
+      {
+        distanceForClusterSpawn = customDistance;
+      }
 
-        OptimizedSchematic schematic = new OptimizedSchematic(ev.Schematic, serverSideColliders, clientSideLight,
+      OptimizedSchematic schematic = new OptimizedSchematic(ev.Schematic, serverSideColliders, clientSideLight,
         hideDistantPrimitives, distanceForClusterSpawn, excludedNamesForUnspawningDistantObjects,
         maxDistanceForPrimitiveCluster, maxPrimitivesPerCluster);
 
-        optimizedSchematics.Add(schematic);
+      optimizedSchematics.Add(schematic);
 
-        if (ev.Schematic == null) return;
-
-        foreach (LightSourceToy light in LightToDestroy)
-        {
-          if (light == null) continue;
-          GameObject.Destroy(light.gameObject);
-        }
-        Timing.CallDelayed(1f, () =>
-        {
-
-          if (ev.Schematic == null || schematic == null) return;
-          schematic.schematicServerSideElmentCount = ev.Schematic.GetComponentsInChildren<LightSourceToy>().Count(p => p != null);
-          schematic.schematicServerEmptiesElementSideCount = 0;
-
-        });
+      foreach (GameObject gameObject in gameObjectToDestroy)
+      {
+        GameObject.Destroy(gameObject);
       }
+
+      schematic.schematicServerSideElmentCount = 0;
+      schematic.schematicServerEmptiesElementSideCount = 0;
+      Timing.CallDelayed(1f, () =>
+      {
+        if (ev.Schematic == null || schematic == null) return;
+        schematic.schematicServerSideElmentCount += ev.Schematic.GetComponentsInChildren<LightSourceToy>().Count(p => p != null);
+        schematic.schematicServerSideElmentCount += ev.Schematic.GetComponentsInChildren<PrimitiveObjectToy>().Count(p => p != null);
+        schematic.schematicServerEmptiesElementSideCount += ev.Schematic.GetComponentsInChildren<PrimitiveObjectToy>().Count(p => p != null && p.PrimitiveFlags == PrimitiveFlags.None);
+      });
     }
 
     private void OnSchematicDestroyed(SchematicDestroyedEventArgs ev)
