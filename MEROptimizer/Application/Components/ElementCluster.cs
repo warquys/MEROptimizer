@@ -19,7 +19,7 @@ namespace MEROptimizer.Application.Components
 
     public Dictionary<Player, List<IClientSideElement>> awaitingSpawn = new Dictionary<Player, List<IClientSideElement>>();
 
-    public HashSet<Player> insidePlayers = new HashSet<Player>();
+    public List<Player> insidePlayers = new List<Player>();
 
     public bool instantSpawn;
 
