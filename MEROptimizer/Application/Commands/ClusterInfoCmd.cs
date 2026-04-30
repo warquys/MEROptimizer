@@ -31,15 +31,15 @@ namespace MEROptimizer.Application.Commands
       {
         message +=
           $"Schematic : {os.schematic.name}\n" +
-          $"Number of clusters : {os.elementClusters.Count}";
+          $"Number of clusters : {os.elementClusters.Count}\n";
 
         foreach (ElementCluster cluster in os.elementClusters)
         {
-          message += $"\nId : {cluster.id} | Pos : {cluster.transform.position} | Number of primitives : {cluster.elements.Count}";
+          message += $"Id : {cluster.id} | Pos : {cluster.transform.position} | Number of primitives : {cluster.elements.Count}\n";
         }
       }
 
-      message += $"\n----------------\n";
+      message += $"----------------\n";
 
       response = message != "" ? message : "No information to display";
 

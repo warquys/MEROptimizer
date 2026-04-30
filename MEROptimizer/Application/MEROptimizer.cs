@@ -2,19 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using AdminToys;
-using Exiled.Events.EventArgs.Scp079;
+using Exiled.API.Features.Doors;
+using Interactables.Interobjects.DoorUtils;
 using LabApi.Events.Arguments.PlayerEvents;
 using LabApi.Events.Arguments.Scp079Events;
 using LabApi.Features.Wrappers;
 using MEC;
 using MEROptimizer.Application.Components;
-using MEROptimizer.MEROptimizer.Application.Components;
+using MEROptimizer.Application.Extensions;
 using Mirror;
 using PlayerRoles;
-using PlayerRoles.PlayableScps.Scp079;
 using ProjectMER.Events.Arguments;
-using ProjectMER.Events.Handlers;
+using ProjectMER.Features;
 using UnityEngine;
+using DoorType = ProjectMER.Features.Enums.DoorType;
 using LightSourceToy = AdminToys.LightSourceToy;
 using Logger = LabApi.Features.Console.Logger;
 using PrimitiveObjectToy = AdminToys.PrimitiveObjectToy;
@@ -27,8 +28,8 @@ namespace MEROptimizer.Application
   public class MEROptimizer
   {
     public static uint PrimitiveAssetId;
-    
     public static uint LightAssetId;
+    public static Dictionary<DoorType, uint> DoorAssetIds = new Dictionary<DoorType, uint>();
 
     private bool excludeCollidables;
 
@@ -148,90 +149,59 @@ namespace MEROptimizer.Application
       optimizedSchematics.Clear();
     }
 
-    Dictionary<PrimitiveObjectToy, bool> GetPrimitivesToOptimize(Transform parent, List<Transform> parentToExclude,
-      Dictionary<PrimitiveObjectToy, bool> primitives = null, bool clusterChilds = true)
+    Dictionary<T, bool> GetToOptimize<T>(Transform root, List<Transform> parentToExclude)
+      where T : MonoBehaviour
     {
+      Dictionary<T, bool> elements = new Dictionary<T, bool>();
+      InterGetToOptimize(root, true);
+      return elements;
       
-      if (primitives == null) primitives = new Dictionary<PrimitiveObjectToy, bool>();
-
-      for (int i = 0; i < parent.childCount; i++)
+      void InterGetToOptimize(Transform current, bool clusterChilds)
       {
-        Transform child = parent.GetChild(i);
-        if (child == null || parentToExclude.Contains(child)) continue;
-
-        if (clusterChilds)
+        for (int i = 0; i < current.childCount; i++)
         {
-          foreach (string name in excludedNamesForUnspawningDistantObjects)
+          Transform child = current.GetChild(i);
+          if (child == null || parentToExclude.Contains(child)) continue;
+
+          if (clusterChilds)
           {
-            if (child.name.Contains(name))
+            foreach (string name in excludedNamesForUnspawningDistantObjects)
             {
-              clusterChilds = false;
-              //break;
+              if (child.name.Contains(name))
+              {
+                clusterChilds = false;
+              }
             }
           }
-        }
 
-        if (excludedNames.Any(n => child.name.ToLower().Contains(n.ToLower())))
-        {
-          continue;
-        }
-
-        if (child.TryGetComponent(out PrimitiveObjectToy primitive))
-        {
-          if (this.excludeCollidables && primitive.PrimitiveFlags.HasFlag(PrimitiveFlags.Collidable))
+          if (excludedNames.Any(n => child.name.ToLower().Contains(n.ToLower())))
           {
             continue;
           }
 
-          if (primitive.PrimitiveFlags != PrimitiveFlags.None)
+          if (child.TryGetComponent(out T element))
           {
-            primitives.Add(primitive, clusterChilds);
-          }
-        }
-
-        GetPrimitivesToOptimize(child, parentToExclude, primitives, clusterChilds: clusterChilds);
-      }
-
-      return primitives;
-    }
-
-    Dictionary<LightSourceToy, bool> GetLightsToOptimize(Transform parent, List<Transform> parentToExclude,
-      Dictionary<LightSourceToy, bool> lights = null, bool clusterChilds = true)
-    {
-
-      if (lights == null) lights = new Dictionary<LightSourceToy, bool>();
-
-      for (int i = 0; i < parent.childCount; i++)
-      {
-        Transform child = parent.GetChild(i);
-        if (child == null || parentToExclude.Contains(child)) continue;
-
-        if (clusterChilds)
-        {
-          foreach (string name in excludedNamesForUnspawningDistantObjects)
-          {
-            if (child.name.Contains(name))
+            if (element is PrimitiveObjectToy primitive)
             {
-              clusterChilds = false;
-              //break;
+              if (this.excludeCollidables && primitive.PrimitiveFlags.HasFlag(PrimitiveFlags.Collidable))
+              {
+                continue;
+              }
+
+              if (primitive.PrimitiveFlags != PrimitiveFlags.None)
+              {
+                 elements.Add(element, clusterChilds);
+              }
+            }
+            else
+            {
+              elements.Add(element, clusterChilds);
             }
           }
-        }
 
-        if (excludedNames.Any(n => child.name.ToLower().Contains(n.ToLower())))
-        {
-          continue;
+          InterGetToOptimize(child, clusterChilds);
         }
-
-        if (child.TryGetComponent(out LightSourceToy light))
-        {
-          lights.Add(light, clusterChilds);
-        }
-
-        GetLightsToOptimize(child, parentToExclude, lights, clusterChilds: clusterChilds);
       }
-
-      return lights;
     }
 
     // --------------- EXILED/LabAPI Events
@@ -268,7 +238,7 @@ namespace MEROptimizer.Application
     }
 
     private void OnSpawned(PlayerSpawnedEventArgs ev)
-    { 
+    {
       OnPlayerSpawned(ev.Player);
     }
 
@@ -287,36 +257,71 @@ namespace MEROptimizer.Application
     {
       Clear();
 
-      if (PrimitiveAssetId != 0 && LightAssetId != 0) return;
+      if (PrimitiveAssetId != 0 && LightAssetId != 0 && DoorAssetIds.Count != 0) return;
+      PrefabManager.RegisterPrefabs();
 
-      foreach (GameObject prefab in NetworkClient.prefabs.Values)
+      try
       {
-        if (PrimitiveAssetId == 0 && prefab.TryGetComponent<PrimitiveObjectToy>(out _))
-        {
-          PrimitiveAssetId = prefab.GetComponent<NetworkIdentity>().assetId;
-          Logger.Debug("PrimitiveObjectToy AssetId successfully found.");
-        }
-
-        if (LightAssetId == 0 && prefab.TryGetComponent<LightSourceToy>(out _))
-        {
-          LightAssetId = prefab.GetComponent<NetworkIdentity>().assetId;
-          Logger.Debug("LightSourceToy AssetId successfully found.");
-        }
-
-        if (PrimitiveAssetId != 0 && LightAssetId != 0)
-        {
-          break;
-        }
+        PrimitiveAssetId = PrefabManager.PrimitiveObject.GetComponent<NetworkIdentity>().assetId;
+        Logger.Debug("PrimitiveObjectToy AssetId successfully found via PrefabManager.");
+      }
+      catch (System.Exception ex)
+      {
+        Logger.Error("Could not find the PrimitiveObjectToy prefab! Client-side primitives will fail to spawn.\n" + ex.Message);
       }
 
-      if (PrimitiveAssetId == 0)
+      try
       {
-        Logger.Error("Could not find the PrimitiveObjectToy prefab! Client-side primitives will fail to spawn.");
+        LightAssetId = PrefabManager.LightSource.GetComponent<NetworkIdentity>().assetId;
+        Logger.Debug("LightSourceToy AssetId successfully found via PrefabManager.");
+      }
+      catch (System.Exception ex)
+      {
+        Logger.Error("Could not find the LightSourceToy prefab! Client-side lights will fail to spawn." + ex.Message);
       }
 
-      if (LightAssetId == 0)
+      DoorType[] spawnableDoors = new DoorType[]
       {
-        Logger.Error("Could not find the LightSourceToy prefab! Client-side lights will fail to spawn.");
+          DoorType.Lcz,
+          DoorType.Hcz,
+          DoorType.Ez,
+          DoorType.HeavyBulkDoor,
+          DoorType.Gate
+      };
+
+      foreach (DoorType doorType in spawnableDoors)
+      {
+        try
+        {
+          DoorVariant doorPrefab;
+          switch (doorType)
+          {
+            case DoorType.Lcz:
+              doorPrefab = PrefabManager.DoorLcz;
+              break;
+            case DoorType.Hcz:
+              doorPrefab = PrefabManager.DoorHcz;
+              break;
+            case DoorType.Ez:
+              doorPrefab = PrefabManager.DoorEz;
+              break;
+            case DoorType.Bulkdoor:
+              doorPrefab = PrefabManager.DoorHeavyBulk;
+              break;
+            case DoorType.Gate:
+              doorPrefab = PrefabManager.DoorGate;
+              break;
+            default:
+              throw new NotImplementedException($"Type of doors {doorType} need to be register in OnWaitingForPlayers.");
+          }
+
+          DoorAssetIds[doorType] = doorPrefab.GetComponent<NetworkIdentity>().assetId;
+          Logger.Debug($"DoorVariant AssetId for {doorType} successfully found.");
+        }
+        catch (System.Exception ex)
+        {
+          Logger.Error($"Could not find the DoorVariant prefab for {doorType}! Error: {ex.Message}");
+        }
       }
     }
 
@@ -429,7 +434,7 @@ namespace MEROptimizer.Application
           Timing.CallDelayed(.5f, () =>
           {
 
-            if (player!= null && player.Role == RoleTypeId.Tutorial)
+            if (player != null && player.Role == RoleTypeId.Tutorial)
             {
               foreach (OptimizedSchematic schematic in optimizedSchematics.Where(s => s != null && s.schematic != null))
               {
@@ -469,11 +474,11 @@ namespace MEROptimizer.Application
             }
           }
 
-          if (player.Role == RoleTypeId.Filmmaker || player.Role == RoleTypeId.Scp079)
+          if (player.Role == RoleTypeId.Filmmaker)
           {
             Timing.CallDelayed(.5f, () =>
             {
-              if (player != null && (player.Role == RoleTypeId.Filmmaker || player.Role == RoleTypeId.Scp079))
+              if (player != null && (player.Role == RoleTypeId.Filmmaker))
               {
                 foreach (OptimizedSchematic schematic in optimizedSchematics.Where(s => s != null && s.schematic != null))
                 {
@@ -497,10 +502,18 @@ namespace MEROptimizer.Application
               }
             });
           }
+          /*
+          else if (player.Role != RoleTypeId.Scp079 && player.Role != RoleTypeId.Spectator)
+          {
+            
+            Timing.CallDelayed(.1f, () =>
+            {
+              player.Position = player.Position + Vector3.up * 0.01f;
+            });
+          }
+          */
         }
-
       }
-
     }
 
     private void OnPlayerChangedSpectator(Player player, Player oldTarget, Player newTarget)
@@ -530,7 +543,6 @@ namespace MEROptimizer.Application
 
     private void OnSchematicSpawned(SchematicSpawnedEventArgs ev)
     {
-
       if (isDynamiclyDisabled)
       {
         Logger.Warn($"Skipping the optimisation of {ev.Schematic.name} because the plugin is dynamicly disabled by command (mero.disable)");
@@ -552,19 +564,18 @@ namespace MEROptimizer.Application
         parentsToExlude.Add(anim.transform);
       }
 
-      Dictionary<IClientSideElement, bool> clientSideLight = new Dictionary<IClientSideElement, bool>();
+      Dictionary<IClientSideElement, bool> clientSideElement = new Dictionary<IClientSideElement, bool>();
       List<Collider> serverSideColliders = new List<Collider>();
-      List<LightSourceToy> LightToDestroy = new List<LightSourceToy>();
       List<GameObject> gameObjectToDestroy = new List<GameObject>();
 
-      Dictionary<PrimitiveObjectToy, bool> primitivesToOptimize = GetPrimitivesToOptimize(ev.Schematic.transform, parentsToExlude);
+      Dictionary<PrimitiveObjectToy, bool> primitivesToOptimize = GetToOptimize<PrimitiveObjectToy>(ev.Schematic.transform, parentsToExlude);
 
       if (primitivesToOptimize != null && !primitivesToOptimize.IsEmpty())
       {
         foreach (PrimitiveObjectToy primitive in primitivesToOptimize.Keys)
         {
           // store the data about the primitive
-          clientSideLight.Add(new ClientSidePrimitive(primitive), primitivesToOptimize[primitive]);
+          clientSideElement.Add(new ClientSidePrimitive(primitive), primitivesToOptimize[primitive]);
 
           // Add collider for the server if the primitive is collidable
           if (primitive.PrimitiveFlags.HasFlag(PrimitiveFlags.Collidable))
@@ -580,23 +591,32 @@ namespace MEROptimizer.Application
 
             MeshCollider meshCollider = collider.AddComponent<MeshCollider>();
             meshCollider.sharedMesh = PrimitiveObjectToy.PrimitiveTypeToMesh[primitive.PrimitiveType];
-
-            if (meshCollider != null) serverSideColliders.Add(meshCollider);
-            else UnityEngine.Object.Destroy(collider);
+            serverSideColliders.Add(meshCollider);
           }
 
           gameObjectToDestroy.Add(primitive.gameObject);
         }
       }
 
-      Dictionary<LightSourceToy, bool> lightToOptimize = GetLightsToOptimize(ev.Schematic.transform, parentsToExlude);
-
+      Dictionary<LightSourceToy, bool> lightToOptimize = GetToOptimize<LightSourceToy>(ev.Schematic.transform, parentsToExlude);
       if (lightToOptimize != null && !lightToOptimize.IsEmpty())
       {
         foreach (LightSourceToy light in lightToOptimize.Keys)
         {
-          clientSideLight.Add(new ClientSideLight(light), lightToOptimize[light]);
-          LightToDestroy.Add(light);
+          clientSideElement.Add(new ClientSideLight(light), lightToOptimize[light]);
+          gameObjectToDestroy.Add(light.gameObject);
+        }
+      }
+
+      Dictionary<DoorVariant, bool> doorsToOptimize = GetToOptimize<DoorVariant>(ev.Schematic.transform, parentsToExlude);
+      Logger.Warn("Doors found " + ev.Schematic.GetComponentsInChildren<DoorVariant>().Length);
+      if (doorsToOptimize != null && !doorsToOptimize.IsEmpty())
+      {
+        foreach (DoorVariant door in doorsToOptimize.Keys)
+        {
+          Logger.Warn("Doors spawned " + door.GetDoorType());
+          clientSideElement.Add(new ClientSideDoor(door, door.GetDoorType()), doorsToOptimize[door]);
+          gameObjectToDestroy.Add(door.gameObject);
         }
       }
 
@@ -606,7 +626,7 @@ namespace MEROptimizer.Application
         distanceForClusterSpawn = customDistance;
       }
 
-      OptimizedSchematic schematic = new OptimizedSchematic(ev.Schematic, serverSideColliders, clientSideLight,
+      OptimizedSchematic schematic = new OptimizedSchematic(ev.Schematic, serverSideColliders, clientSideElement,
         hideDistantPrimitives, distanceForClusterSpawn, excludedNamesForUnspawningDistantObjects,
         maxDistanceForPrimitiveCluster, maxPrimitivesPerCluster);
 

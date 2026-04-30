@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using AdminToys;
 using LabApi.Features.Wrappers;
-using MEROptimizer.MEROptimizer.Application.Components;
 using UnityEngine;
 
 namespace MEROptimizer.Application.Components
@@ -18,8 +14,9 @@ namespace MEROptimizer.Application.Components
     public ClientSidePrimitive displayClusterPrimitive { get; set; }
 
     public Dictionary<Player, List<IClientSideElement>> awaitingSpawn = new Dictionary<Player, List<IClientSideElement>>();
+    public List<Player> endSpawning = new List<Player>();
 
-    public List<Player> insidePlayers = new List<Player>();
+    public HashSet<Player> insidePlayers = new HashSet<Player>();
 
     public bool instantSpawn;
 
@@ -97,10 +94,7 @@ namespace MEROptimizer.Application.Components
 
       }
 
-      if (!insidePlayers.Contains(player))
-      {
-        insidePlayers.Add(player);
-      }
+      insidePlayers.Add(player);
     }
 
     public void RemovePlayer(Player player)
@@ -127,38 +121,40 @@ namespace MEROptimizer.Application.Components
         spawning = false;
       }
 
-      foreach (Player player in awaitingSpawn.Keys.ToList())
+      foreach (KeyValuePair<Player, List<IClientSideElement>> player_list in awaitingSpawn)
       {
-        List<IClientSideElement> list = awaitingSpawn[player];
+        Player player = player_list.Key;
+        List<IClientSideElement> list = player_list.Value;
 
-        if (list.IsEmpty())
+        for (int i = 0; list.Count > 0 && i < (multiFrameSpawn ? 1 : numberOfPrimitivePerSpawn); i++)
         {
-          awaitingSpawn.Remove(player);
-          break;
-        }
-
-        List<Player> spectatingPlayers = player.CurrentSpectators.ToList();
-
-        for (int i = 0; i < (multiFrameSpawn ? 1 : numberOfPrimitivePerSpawn); i++)
-        {
-          IClientSideElement prim = list.FirstOrDefault();
-
-          if (prim == null) break;
+          IClientSideElement prim = list[0];
 
           list.Remove(prim);
 
           prim.SpawnClient(player);
 
-          foreach (Player p in spectatingPlayers)
+          foreach (Player p in player.CurrentSpectators)
           {
             prim.SpawnClient(p);
           }
         }
 
+        if (list.IsEmpty())
+        {
+          endSpawning.Add(player);
+        }
       }
+
+      foreach (Player player in endSpawning)
+      {
+        awaitingSpawn.Remove(player);
+      }
+
+      endSpawning.Clear();
     }
     public void OnTriggerExit(Collider collider)
-    {
+      {
       if (collider == null || collider.transform.parent != null) return;
 
       if (!collider.CompareTag("Player") || !collider.gameObject.TryGetComponent(out PlayerTrigger playerTrigger)) return;

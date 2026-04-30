@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using LabApi.Features.Wrappers;
 using MEC;
-using MEROptimizer.MEROptimizer.Application.Components;
 using PlayerRoles;
 using ProjectMER.Features.Objects;
 using UnityEngine;
@@ -102,7 +99,6 @@ namespace MEROptimizer.Application.Components
 
         if (!elements.IsEmpty())
         {
-
           // Calculate the center of the schematic, where the first cluster will spawn
           Vector3 center3D = Vector3.zero;
           foreach (IClientSideElement p in elements.Keys)

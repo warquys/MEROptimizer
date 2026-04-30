@@ -1,8 +1,8 @@
 ﻿using System.Linq;
+using Interactables.Interobjects.DoorUtils;
 using LabApi.Features.Wrappers;
-using MEROptimizer.MEROptimizer.Application.Components;
 using Mirror;
-using System;
+using ProjectMER.Features;
 using UnityEngine;
 
 namespace MEROptimizer.Application.Components
@@ -10,9 +10,9 @@ namespace MEROptimizer.Application.Components
   public class ClientSideLight : IClientSideElement
   {
     // Mirror Payload Header specific for the target behavour
-    //  Depends on the order of the NetworkBehaviour on the Primitive Object Toy prefab.
-    private const byte PrimitiveBehaviourIndex = 1;
-    private const byte PrimitiveInitialPayloadSize = 90;
+    //  Depends on the order of the NetworkBehaviour on the Object Toy prefab.
+    private const byte BehaviourIndex = 1;
+    private const byte InitialPayloadSize = 90;
 
     const byte movementSmoothing = 0;
     const bool isStatic = false;
@@ -86,50 +86,49 @@ namespace MEROptimizer.Application.Components
 
     private void GenerateNetworkMessages()
     {
-      NetworkWriterPooled writer = NetworkWriterPool.Get();
+      using (var writer = NetworkWriterPool.Get())
+      {      // 1) Header: behaviour index + payload size
+        writer.Write<byte>(BehaviourIndex);
+        writer.Write<byte>(InitialPayloadSize);
 
-      // 1) Header: behaviour index + payload size
-      writer.Write<byte>(PrimitiveBehaviourIndex);
-      writer.Write<byte>(PrimitiveInitialPayloadSize);
+        // 2) AdminToyBase.SerializeSyncVars(forceAll: true)
+        writer.Write<Vector3>(position);
+        writer.Write<Quaternion>(rotation);
+        writer.Write<Vector3>(scale);
+        writer.Write<byte>(movementSmoothing);
+        writer.Write<bool>(isStatic);
 
-      // 2) AdminToyBase.SerializeSyncVars(forceAll: true)
-      writer.Write<Vector3>(position);
-      writer.Write<Quaternion>(rotation);
-      writer.Write<Vector3>(scale);
-      writer.Write<byte>(movementSmoothing);
-      writer.Write<bool>(isStatic);
+        // 3) PrimitiveObjectToy.SerializeSyncVars(forceAll: true)
+        writer.Write<float>(lightIntensity);
+        writer.Write<float>(lightRange);
+        writer.Write<Color>(lightColor);
+        writer.Write<int>((int)shadowType);
+        writer.Write<float>(shadowStrength);
+        writer.Write<int>((int)lightType);
+        writer.Write<int>((int)lightShape);
+        writer.Write<float>(spotAngle);
+        writer.Write<float>(innerSpotAngle);
 
-      // 3) PrimitiveObjectToy.SerializeSyncVars(forceAll: true)
-      writer.Write<float>(lightIntensity);
-      writer.Write<float>(lightRange);
-      writer.Write<Color>(lightColor);
-      writer.Write<int>((int)shadowType);
-      writer.Write<float>(shadowStrength);
-      writer.Write<int>((int)lightType);
-      writer.Write<int>((int)lightShape);
-      writer.Write<float>(spotAngle);
-      writer.Write<float>(innerSpotAngle);
+        // 4) AdminToyBase.OnSerialize(initialState: true) -> parent netId
+        writer.Write<uint>(NoParentNetId);
 
-      // 4) AdminToyBase.OnSerialize(initialState: true) -> parent netId
-      writer.Write<uint>(NoParentNetId);
-
-      spawnMessage = new SpawnMessage()
-      {
-        netId = netId,
-        isLocalPlayer = false,
-        isOwner = false,
-        sceneId = 0,
-        assetId = MEROptimizer.LightAssetId,
-        position = position,
-        rotation = rotation,
-        scale = scale,
-        payload = writer.ToArraySegment()
-      };
-
-      destroyMessage = new ObjectDestroyMessage()
-      {
-        netId = netId,
-      };
+        spawnMessage = new SpawnMessage()
+        {
+          netId = netId,
+          isLocalPlayer = false,
+          isOwner = false,
+          sceneId = 0,
+          assetId = MEROptimizer.LightAssetId,
+          position = position,
+          rotation = rotation,
+          scale = scale,
+          payload = writer.ToArray().Segment(0, (int)writer.Position)
+        };
+        destroyMessage = new ObjectDestroyMessage()
+        {
+          netId = netId,
+        };
+      }
     }
 
     public void DestroyForEveryone()
