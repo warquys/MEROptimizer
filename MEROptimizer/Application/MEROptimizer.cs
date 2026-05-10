@@ -609,12 +609,10 @@ namespace MEROptimizer.Application
       }
 
       Dictionary<DoorVariant, bool> doorsToOptimize = GetToOptimize<DoorVariant>(ev.Schematic.transform, parentsToExlude);
-      Logger.Warn("Doors found " + ev.Schematic.GetComponentsInChildren<DoorVariant>().Length);
       if (doorsToOptimize != null && !doorsToOptimize.IsEmpty())
       {
         foreach (DoorVariant door in doorsToOptimize.Keys)
         {
-          Logger.Warn("Doors spawned " + door.GetDoorType());
           clientSideElement.Add(new ClientSideDoor(door, door.GetDoorType()), doorsToOptimize[door]);
           gameObjectToDestroy.Add(door.gameObject);
         }
