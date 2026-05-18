@@ -604,7 +604,7 @@ namespace MEROptimizer.Application
         foreach (LightSourceToy light in lightToOptimize.Keys)
         {
           clientSideElement.Add(new ClientSideLight(light), lightToOptimize[light]);
-          gameObjectToDestroy.Add(light.gameObject);
+          //gameObjectToDestroy.Add(light.gameObject);
         }
       }
 
