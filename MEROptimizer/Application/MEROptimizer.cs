@@ -614,7 +614,7 @@ namespace MEROptimizer.Application
         foreach (DoorVariant door in doorsToOptimize.Keys)
         {
           clientSideElement.Add(new ClientSideDoor(door, door.GetDoorType()), doorsToOptimize[door]);
-          gameObjectToDestroy.Add(door.gameObject);
+          //gameObjectToDestroy.Add(door.gameObject);
         }
       }
 
