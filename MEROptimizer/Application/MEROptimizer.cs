@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AdminToys;
 using Exiled.API.Features.Doors;
+using Exiled.API.Features.Toys;
 using Interactables.Interobjects.DoorUtils;
 using LabApi.Events.Arguments.PlayerEvents;
 using LabApi.Events.Arguments.Scp079Events;
@@ -10,6 +11,7 @@ using LabApi.Features.Wrappers;
 using MEC;
 using MEROptimizer.Application.Components;
 using MEROptimizer.Application.Extensions;
+using MEROptimizer.MEROptimizer.Application.Components;
 using Mirror;
 using PlayerRoles;
 using ProjectMER.Events.Arguments;
@@ -603,7 +605,12 @@ namespace MEROptimizer.Application
       {
         foreach (LightSourceToy light in lightToOptimize.Keys)
         {
-          clientSideElement.Add(new ClientSideLight(light), lightToOptimize[light]);
+          if (light.TryGetComponent<NetworkIdentity>(out var networkIdentity))
+          {
+            clientSideElement.Add(new ServerClientHidable(light.transform, networkIdentity), lightToOptimize[light]);
+          }
+
+          //clientSideElement.Add(new ClientSideLight(light), lightToOptimize[light]);
           //gameObjectToDestroy.Add(light.gameObject);
         }
       }
@@ -613,7 +620,12 @@ namespace MEROptimizer.Application
       {
         foreach (DoorVariant door in doorsToOptimize.Keys)
         {
-          clientSideElement.Add(new ClientSideDoor(door, door.GetDoorType()), doorsToOptimize[door]);
+          if (door.TryGetComponent<NetworkIdentity>(out var networkIdentity))
+          {
+            clientSideElement.Add(new ServerClientHidable(door.transform, networkIdentity), doorsToOptimize[door]);
+          }
+
+          //clientSideElement.Add(new ClientSideDoor(door, door.GetDoorType()), doorsToOptimize[door]);
           //gameObjectToDestroy.Add(door.gameObject);
         }
       }

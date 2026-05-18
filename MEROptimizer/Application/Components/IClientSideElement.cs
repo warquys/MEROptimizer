@@ -5,8 +5,8 @@ namespace MEROptimizer.Application.Components
 {
   public interface IClientSideElement
   {
-    Vector3 scale { get; set; }
-    Vector3 position { get; set; }
+    Vector3 scale { get; }
+    Vector3 position { get; }
 
     void SpawnClient(Player player);
     void SpawnForEveryone();
